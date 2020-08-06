@@ -13,7 +13,7 @@ architecture fpmul_tb_arq of fpmul_tb is
 	constant WORD_SIZE_T: natural:= 32;	-- tamaño de datos
 	constant EXP_SIZE_T: natural:= 8;   -- tamaño exponente
 
-	signal clk: std_logic:= '0';
+	signal clk: std_logic:= '1';
 	signal a_file: std_logic_vector(WORD_SIZE_T-1 downto 0):= (others => '0');
 	signal b_file: std_logic_vector(WORD_SIZE_T-1 downto 0):= (others => '0');
 	signal z_file: std_logic_vector(WORD_SIZE_T-1 downto 0):= (others => '0');
@@ -42,7 +42,27 @@ architecture fpmul_tb_arq of fpmul_tb is
 	end component;
 begin
 	-- Generacion del clock del sistema
-	clk <= not(clk) after TCK/ 2; -- reloj
+	clk <= not(clk) after TCK / 2; -- reloj
+
+	-- Instanciacion del DUT
+	DUT: entity work.fpmul
+			generic map(
+				N => WORD_SIZE_T,
+				E => EXP_SIZE_T
+			)
+			port map(
+                clk => clk,
+				a => std_logic_vector(a_file),
+				b => std_logic_vector(b_file),
+				p => z_dut
+			);
+
+	-- Instanciacion de la linea de retardo
+	del: delay_gen
+			generic map(WORD_SIZE_T, DELAY)
+			port map(clk, std_logic_vector(z_file), z_del_aux);
+
+	z_del <= z_del_aux;
 
 	Test_Sequence: process
 		variable l: line;
@@ -50,7 +70,7 @@ begin
         variable i : integer := WORD_SIZE_T - 1;
 	begin
 		while not(endfile(datos)) loop 		-- si se quiere leer de stdin se pone "input"
-			wait until rising_edge(clk);
+			wait until falling_edge(clk);
 			ciclos <= ciclos + 1;			-- solo para debugging
 			readline(datos, l);
             i := WORD_SIZE_T - 1;
@@ -86,6 +106,20 @@ begin
                 end if;
                 i := i - 1;
             end loop;
+
+	        -- Verificacion de la condicion
+            wait until rising_edge(clk);
+            wait for TCK * 1/4; -- esperamos a que el DUT produzca el resultado
+            report "TEST: " & to_hstring(a_file) & " * " & to_hstring(b_file) & " = " & to_hstring(z_file);
+            assert z_del = z_dut report
+                "Error: Salida del DUT no coincide con referencia (esperado = " &
+                integer'image(to_integer(unsigned(z_del))) &
+                ", dut = " &
+                integer'image(to_integer(unsigned(z_dut))) & ")"
+                severity error;
+            if z_del /= z_dut then
+                errores <= errores + 1;
+            end if;
 		end loop;
 
 		file_close(datos);		-- se cierra del archivo
@@ -93,41 +127,5 @@ begin
 		assert false report		-- se aborta la simulacion (fin del archivo)
 			"Fin de la simulacion" severity failure;
 	end process Test_Sequence;
-
-	-- Instanciacion del DUT
-	DUT: entity work.fpmul
-			generic map(
-				N => WORD_SIZE_T,
-				E => EXP_SIZE_T
-			)
-			port map(
-				a => std_logic_vector(a_file),
-				b => std_logic_vector(b_file),
-				p => z_dut
-			);
-
-	-- Instanciacion de la linea de retardo
-	del: delay_gen
-			generic map(WORD_SIZE_T, DELAY)
-			port map(clk, std_logic_vector(z_file), z_del_aux);
-
-	z_del <= z_del_aux;
-
-	-- Verificacion de la condicion
-	verificacion: process
-	begin
-        wait for TCK * 3/4;
-        report "TEST: " & to_hstring(a_file) & " * " & to_hstring(b_file) & " = " & to_hstring(z_file);
-        assert z_del = z_dut report
-            "Error: Salida del DUT no coincide con referencia (esperado = " &
-            integer'image(to_integer(unsigned(z_del))) &
-            ", dut = " &
-            integer'image(to_integer(unsigned(z_dut))) & ")"
-            severity error;
-        if z_del /= z_dut then
-            errores <= errores + 1;
-        end if;
-        wait for TCK * 1/4;
-	end process;
 
 end architecture fpmul_tb_arq;

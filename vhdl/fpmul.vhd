@@ -9,6 +9,7 @@ entity fpmul is
         E: integer := 8
     );
     port (
+        clk: in std_logic;
         a, b: in std_logic_vector(N - 1 downto 0);
         p: out std_logic_vector(N - 1 downto 0)
     );
@@ -19,15 +20,12 @@ architecture fpmul_arq of fpmul is
 
     signal a_sign: std_logic;
     signal b_sign: std_logic;
-    signal p_sign: std_logic;
 
     signal a_exp: std_logic_vector(E - 1 downto 0);
     signal b_exp: std_logic_vector(E - 1 downto 0);
-    signal p_exp: std_logic_vector(E downto 0);
 
     signal a_frac: std_logic_vector(NP downto 0);
     signal b_frac: std_logic_vector(NP downto 0);
-    signal p_frac: std_logic_vector(NP - 1 downto 0);
 
     signal p_frac_inter: std_logic_vector(2 * NP + 1 downto 0);
 
@@ -45,20 +43,20 @@ architecture fpmul_arq of fpmul is
 
     procedure check(
         signal exp: in std_logic_vector(E downto 0);
-        signal p_sign: out std_logic;
-        signal p_exp: out std_logic_vector(E downto 0);
-        signal p_frac: out std_logic_vector(NP - 1 downto 0)
+        variable r_sign: out std_logic;
+        variable r_exp: out std_logic_vector(E downto 0);
+        variable r_frac: out std_logic_vector(NP - 1 downto 0)
     ) is begin
-        p_sign <= a_sign xor b_sign;
+        r_sign := a_sign xor b_sign;
         if to_integer(signed(exp) - bias) > e_max then
             -- report "overflow!";
-            p_exp <= (0 => '0', others => '1');
-            p_frac <= (others => '1');
+            r_exp := (0 => '0', others => '1');
+            r_frac := (others => '1');
         elsif to_integer(signed(exp) - bias) < e_min then
             -- report "underflow!";
-            p_sign <= '0';
-            p_exp <= (others => '0');
-            p_frac <= (others => '0');
+            r_sign := '0';
+            r_exp := (others => '0');
+            r_frac := (others => '0');
         end if;
     end procedure;
 
@@ -121,26 +119,29 @@ begin
             s => p_exp_plus_1
         );
 
-    normalize: process (a_sign, b_sign, p_exp_inter, p_exp_plus_1, p_frac_inter) is
+    process (clk) is
+        variable p_sign: std_logic;
+        variable p_exp: std_logic_vector(E downto 0);
+        variable p_frac: std_logic_vector(NP - 1 downto 0);
     begin
-        -- p_exp_inter is (E downto 0) (must discard one bit)
-        -- p_frac_inter is (2NP + 1 downto 0) (must discard down to NP)
+        if rising_edge(clk) then
+            -- p_exp_inter is (E downto 0) (must discard one bit)
+            -- p_frac_inter is (2NP + 1 downto 0) (must discard down to NP)
 
-        if p_frac_inter(2 * NP + 1) = '1' then
-            -- report "shift";
-            p_frac <= p_frac_inter(2 * NP downto NP + 1);
-            p_exp <= p_exp_plus_1;
-            check(p_exp_plus_1, p_sign, p_exp, p_frac);
-        else
-            -- report "no shift";
-            p_frac <= p_frac_inter(2 * NP - 1 downto NP);
-            p_exp <= p_exp_inter;
-            check(p_exp_inter, p_sign, p_exp, p_frac);
-        end if;
-    end process;
+            if p_frac_inter(2 * NP + 1) = '1' then
+                p_frac := p_frac_inter(2 * NP downto NP + 1);
+                p_exp := p_exp_plus_1;
+                check(p_exp_plus_1, p_sign, p_exp, p_frac);
+            else
+                p_frac := p_frac_inter(2 * NP - 1 downto NP);
+                p_exp := p_exp_inter;
+                check(p_exp_inter, p_sign, p_exp, p_frac);
+            end if;
 
-    -- process is begin
-    --     wait for 14 ns;
+            p(N - 1) <= p_sign;
+            p(N - 2 downto NP) <= p_exp(E - 1 downto 0);
+            p(NP - 1 downto 0) <= p_frac;
+
     --     report "a_sign = " & to_string(a_sign);
     --     report "b_sign = " & to_string(b_sign);
     --     report "p_sign = " & to_string(p_sign);
@@ -154,10 +155,7 @@ begin
     --     report "b_frac = 0b" & to_string(b_frac);
     --     report "p_frac_inter = 0b" & to_string(p_frac_inter);
     --     report "";
-    --     wait for 6 ns;
-    -- end process;
+        end if;
+    end process;
 
-    p(N - 1) <= p_sign;
-    p(N - 2 downto NP) <= p_exp(E - 1 downto 0);
-    p(NP - 1 downto 0) <= p_frac;
 end;
