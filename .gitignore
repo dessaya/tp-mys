@@ -1,0 +1,4 @@
+*.o
+*.vcd
+*.cf
+fpmul_tb
