@@ -36,7 +36,7 @@ begin
                 cout => ac(i)
             );
 
-        aa(i) <= a and b(i);
+        aa(i) <= a when b(i) = '1' else (others => '0');
 
         p(i) <= as(i)(0);
     end generate;
@@ -45,7 +45,7 @@ begin
         ab(i + 1) <= ac(i) & as(i)(N - 1 downto 1);
     end generate;
 
-    ab(1) <= '0' & (a(N - 1 downto 1) and b(0));
+    ab(1) <= ('0' & a(N - 1 downto 1)) when b(0) = '1' else (others => '0');
 
     p(0) <= a(0) and b(0);
     p(2 * N - 1 downto N) <= ac(N - 1) & as(N - 1)(N - 1 downto 1);

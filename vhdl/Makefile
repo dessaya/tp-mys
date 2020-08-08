@@ -4,7 +4,7 @@ FILES=adder1.vhd addern.vhd mul.vhd $(NAME).vhd ffd.vhd delay.vhd $(NAME)_tb.vhd
 TEST_ENTITY=$(NAME)_tb
 WAVE_FILE=$(NAME).vcd
 
-GHDL_ARGS=--std=08
+GHDL_ARGS=--std=93c
 
 OBJ=$(FILES:.vhd=.o)
 

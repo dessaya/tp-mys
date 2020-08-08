@@ -1,6 +1,5 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-use IEEE.std_logic_textio.all;
 use IEEE.numeric_std.all;
 use std.textio.all;
 
@@ -40,6 +39,17 @@ architecture fpmul_tb_arq of fpmul_tb is
 			B: out std_logic_vector(N-1 downto 0)
 		);
 	end component;
+
+    function to_string ( a: std_logic_vector) return string is
+        variable b : string (1 to a'length) := (others => NUL);
+        variable stri : integer := 1; 
+    begin
+        for i in a'range loop
+            b(stri) := std_logic'image(a((i)))(2);
+        stri := stri+1;
+        end loop;
+    return b;
+    end function;
 begin
 	-- Generacion del clock del sistema
 	clk <= not(clk) after TCK / 2; -- reloj
@@ -110,7 +120,7 @@ begin
 	        -- Verificacion de la condicion
             wait until rising_edge(clk);
             wait for TCK * 1/4; -- esperamos a que el DUT produzca el resultado
-            report "TEST: " & to_hstring(a_file) & " * " & to_hstring(b_file) & " = " & to_hstring(z_file);
+            report "TEST: " & to_string(a_file) & " * " & to_string(b_file) & " = " & to_string(z_file);
             assert z_del = z_dut report
                 "Error: Salida del DUT no coincide con referencia (esperado = " &
                 integer'image(to_integer(unsigned(z_del))) &
