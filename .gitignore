@@ -1,4 +1,4 @@
 *.o
 *.vcd
 *.cf
-fpmul_tb
+*_tb
