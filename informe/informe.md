@@ -161,9 +161,9 @@ resultado de dichas simulaciones:
 Se utilizó el software Vivado 2018.1 para realizar la síntesis e implementación
 del sistema, sobre la placa Arty-Z7-10.
 
-![Dispositivo sintetizado](device.png)
+![Diseño de bloques](block-design.png)
 
-![Esquemático del dispositivo](schematic.png)
+![Dispositivo sintetizado](device.png)
 
 ![Tabla de utilización](utilization-table.png)
 
