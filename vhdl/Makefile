@@ -1,6 +1,6 @@
 NAME=fpmul
 
-FILES=adder1.vhd addern.vhd mul.vhd $(NAME).vhd ffd.vhd delay.vhd $(NAME)_tb.vhd
+FILES=$(NAME).vhd ffd.vhd delay.vhd $(NAME)_tb.vhd
 TEST_ENTITY=$(NAME)_tb
 WAVE_FILE=$(NAME).vcd
 

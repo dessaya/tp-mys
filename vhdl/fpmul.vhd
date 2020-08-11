@@ -17,48 +17,10 @@ end;
 architecture fpmul_arq of fpmul is
     constant NP: integer := N - E - 1;
 
-    signal a_sign: std_logic;
-    signal b_sign: std_logic;
+    constant BIAS: integer := 2 ** (E - 1) - 1;
 
-    signal a_exp: std_logic_vector(E - 1 downto 0);
-    signal b_exp: std_logic_vector(E - 1 downto 0);
-
-    signal a_frac: std_logic_vector(NP downto 0);
-    signal b_frac: std_logic_vector(NP downto 0);
-
-    signal p_frac_inter: std_logic_vector(2 * NP + 1 downto 0);
-
-    signal add1_s: std_logic_vector(E - 1 downto 0);
-    signal add1_c: std_logic;
-
-    signal add2_a: std_logic_vector(E downto 0);
-    signal p_exp_inter: std_logic_vector(E downto 0);
-    signal p_exp_plus_1: std_logic_vector(E downto 0);
-
-    constant bias: integer := 2 ** (E - 1) - 1;
-    constant e_max: integer := bias;
-    constant e_min: integer := -bias + 1;
-    constant minus_bias: std_logic_vector(E downto 0) := std_logic_vector(to_signed(-bias, E + 1));
-
-    procedure check(
-        signal exp: in std_logic_vector(E downto 0);
-        variable r_sign: out std_logic;
-        variable r_exp: out std_logic_vector(E downto 0);
-        variable r_frac: out std_logic_vector(NP - 1 downto 0)
-    ) is begin
-        r_sign := a_sign xor b_sign;
-        if to_integer(signed(exp) - bias) > e_max then
-            -- report "overflow!";
-            r_exp := (0 => '0', others => '1');
-            r_frac := (others => '1');
-        elsif to_integer(signed(exp) - bias) < e_min then
-            -- report "underflow!";
-            r_sign := '0';
-            r_exp := (others => '0');
-            r_frac := (others => '0');
-        end if;
-    end procedure;
-
+    constant E_MAX: integer := BIAS;
+    constant E_MIN: integer := -BIAS + 1;
 begin
     -- sign                    fraction/significand/mantissa (NP bits)
     --  |                      /                                     \
@@ -68,92 +30,81 @@ begin
     --
     -- N-1 N-2  ......  NP  NP-1                                        0
 
-    -- extract signs
-    a_sign <= a(N - 1);
-    b_sign <= b(N - 1);
-
-    -- extract exponents
-    a_exp <= a(N - 2 downto NP);
-    b_exp <= b(N - 2 downto NP);
-
-    -- extract mantissas, adding the implicit 1.
-    a_frac <= '1' & a(NP - 1 downto 0);
-    b_frac <= '1' & b(NP - 1 downto 0);
-
-    -- product of fractions has length 2NP + 2; is either 01.xxx or 1x.xxx
-    mul: entity work.mul
-        generic map (N => NP + 1)
-        port map(
-            a => a_frac,
-            b => b_frac,
-            p => p_frac_inter
-        );
-
-    -- add exponents and subtract bias
-    add1: entity work.addern
-        generic map (N => E)
-        port map(
-            a => a_exp,
-            b => b_exp,
-            cin => '0',
-            s => add1_s,
-            cout => add1_c
-        );
-    add2_a <= add1_c & add1_s;
-    add2: entity work.addern
-        generic map (N => E + 1)
-        port map(
-            a => add2_a,
-            b => minus_bias,
-            cin => '0',
-            s => p_exp_inter
-        );
-
-    exp_inc: entity work.addern
-        generic map (N => E + 1)
-        port map(
-            a => p_exp_inter,
-            b => std_logic_vector(to_unsigned(1, p_exp_inter'length)),
-            cin => '0',
-            s => p_exp_plus_1
-        );
-
     process (clk) is
+        variable a_sign: std_logic;
+        variable b_sign: std_logic;
+
+        variable a_exp: unsigned(E - 1 downto 0);
+        variable b_exp: unsigned(E - 1 downto 0);
+
+        variable a_frac: unsigned(NP downto 0);
+        variable b_frac: unsigned(NP downto 0);
+
+        variable p_frac_prod: unsigned(2 * NP + 1 downto 0);
+        variable p_frac_u: unsigned(NP - 1 downto 0);
+        variable p_exp_i: integer;
+
         variable p_sign: std_logic;
-        variable p_exp: std_logic_vector(E downto 0);
+        variable p_exp: std_logic_vector(E - 1 downto 0);
         variable p_frac: std_logic_vector(NP - 1 downto 0);
     begin
         if rising_edge(clk) then
-            -- p_exp_inter is (E downto 0) (must discard one bit)
-            -- p_frac_inter is (2NP + 1 downto 0) (must discard down to NP)
+            -- extract signs
+            a_sign := a(N - 1);
+            b_sign := b(N - 1);
 
-            if p_frac_inter(2 * NP + 1) = '1' then
-                p_frac := p_frac_inter(2 * NP downto NP + 1);
-                p_exp := p_exp_plus_1;
-                check(p_exp_plus_1, p_sign, p_exp, p_frac);
+            -- extract exponents
+            a_exp := unsigned(a(N - 2 downto NP));
+            b_exp := unsigned(b(N - 2 downto NP));
+
+            -- extract mantissas, adding the implicit 1.
+            a_frac := unsigned('1' & a(NP - 1 downto 0));
+            b_frac := unsigned('1' & b(NP - 1 downto 0));
+
+            -- p_frac_prod is (2NP + 1 downto 0) (must discard down to NP)
+            p_frac_prod := a_frac * b_frac;
+
+            -- p_exp is (E downto 0) (must discard one bit)
+            p_exp_i := to_integer(a_exp) + to_integer(b_exp) - BIAS;
+            if p_frac_prod(p_frac_prod'left) = '1' then
+                p_exp_i := p_exp_i + 1;
+                p_frac_u := p_frac_prod(2 * NP downto NP + 1);
             else
-                p_frac := p_frac_inter(2 * NP - 1 downto NP);
-                p_exp := p_exp_inter;
-                check(p_exp_inter, p_sign, p_exp, p_frac);
+                p_frac_u := p_frac_prod(2 * NP - 1 downto NP);
+            end if;
+
+            if p_exp_i - BIAS > E_MAX then
+                -- report "overflow!";
+                p_sign := a_sign xor b_sign;
+                p_exp := (0 => '0', others => '1');
+                p_frac := (others => '1');
+            elsif p_exp_i - BIAS < E_MIN then
+                -- report "underflow!";
+                p_sign := '0';
+                p_exp := (others => '0');
+                p_frac := (others => '0');
+            else
+                p_sign := a_sign xor b_sign;
+                p_exp := std_logic_vector(to_unsigned(p_exp_i, E));
+                p_frac := std_logic_vector(p_frac_u);
             end if;
 
             p(N - 1) <= p_sign;
-            p(N - 2 downto NP) <= p_exp(E - 1 downto 0);
+            p(N - 2 downto NP) <= p_exp;
             p(NP - 1 downto 0) <= p_frac;
 
-    --     report "a_sign = " & to_string(a_sign);
-    --     report "b_sign = " & to_string(b_sign);
-    --     report "p_sign = " & to_string(p_sign);
-    --     report "";
-    --     report "a_exp = 0b" & to_string(a_exp) & " (" & to_string(to_integer(signed(a_exp) - bias)) & ")";
-    --     report "b_exp = 0b" & to_string(b_exp) & " (" & to_string(to_integer(signed(b_exp) - bias)) & ")";
-    --     report "p_exp_inter = 0b" & to_string(p_exp_inter) & " (" & to_string(to_integer(signed(p_exp_inter) - 127)) & ")";
-    --     report "p_exp_plus_1 = 0b" & to_string(p_exp_plus_1) & " (" & to_string(to_integer(signed(p_exp_plus_1) - 127)) & ")";
-    --     report "";
-    --     report "a_frac = 0b" & to_string(a_frac);
-    --     report "b_frac = 0b" & to_string(b_frac);
-    --     report "p_frac_inter = 0b" & to_string(p_frac_inter);
-    --     report "";
+            -- report "a_sign = " & std_logic'image(a_sign);
+            -- report "b_sign = " & std_logic'image(b_sign);
+            -- report "p_sign = " & std_logic'image(p_sign);
+            -- report "";
+            -- report "a_exp = " & integer'image(to_integer(a_exp)) & " (" & integer'image(to_integer(unsigned(a_exp) - BIAS)) & ")";
+            -- report "b_exp = " & integer'image(to_integer(b_exp)) & " (" & integer'image(to_integer(unsigned(b_exp) - BIAS)) & ")";
+            -- report "p_exp_inter = " & integer'image(to_integer(unsigned(p_exp))) & " (" & integer'image(to_integer(unsigned(p_exp) - BIAS)) & ")";
+            -- report "";
+            -- report "a_frac = " & integer'image(to_integer(a_frac));
+            -- report "b_frac = " & integer'image(to_integer(b_frac));
+            -- report "p_frac = " & integer'image(to_integer(unsigned(p_frac)));
+            -- report "";
         end if;
     end process;
 

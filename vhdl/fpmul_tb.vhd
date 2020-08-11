@@ -135,7 +135,7 @@ begin
 		file_close(datos);		-- se cierra del archivo
 		wait for TCK*(DELAY+1);
 		assert false report		-- se aborta la simulacion (fin del archivo)
-			"Fin de la simulacion" severity failure;
+			"Fin de la simulacion. Todo bien :)" severity failure;
 	end process Test_Sequence;
 
 end architecture fpmul_tb_arq;
