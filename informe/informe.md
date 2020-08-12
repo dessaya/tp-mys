@@ -22,25 +22,15 @@ flotante.
 El componente está desarrollado en lenguaje VHDL y consta de los siguientes
 archivos:
 
-* Componentes:
+* Componente principal:
     * `fpmul.vhd`: Multiplicador de punto flotante
-    * `mul.vhd`: Multiplicador de enteros
-    * `addern.vhd`: Sumador de n bits
-    * `adder1.vhd`: Sumador de 1 bit
-* Simulaciones:
-    * `adder1_tb.vhd`
-    * `addern_tb.vhd`
-    * `mul_tb.vhd`
 * Simulación y prueba del componente `fpmul`:
     * `fpmul_tb.vhd`
     * `delay.vhd`, `ffd.vhd`: Delay y flip-flop D, utilizados en `fpmul_tb.vhd`
     * `test-files`: Casos de prueba con diferentes valores de `N` y `E`
-* Scripts para compilar con GHDL y visualizar la simulación con GTKWave
+* Script para compilar con GHDL y visualizar la simulación con GTKWave
   (instrucciones en `README.md`):
     * `Makefile`
-    * `Makefile.adder1`
-    * `Makefile.addern`
-    * `Makefile.mul`
 
 El código C está en el archivo `fpmul_prj/fpmul_prj.sdk/fpmul/src/fpmul.c`.
 
@@ -107,7 +97,7 @@ pasos:
 
 ![Diagrama de flujo de datos de `fpmul`](diagrama.png)
 
-# Pruebas
+# Pruebas automáticas
 
 El componente `fpmul_tb` permite ejecutar miles de casos de prueba especificados en
 los archivos ubicados en `test-files`, y para cada caso verifica que la salida
@@ -143,23 +133,17 @@ assert false report "Fin de la simulacion" severity failure;
 
 # Simulaciones
 
-Los componentes `adder1_tb.vhd`, `addern_tb.vhd`, `mul_tb.vhd`y `fpmul_tb.vhd`
-permiten hacer simulaciones de cada uno de los componentes utilizados en el
-diseño. A continuación se muestran capturas de pantalla de GTKWave mostrando el
-resultado de dichas simulaciones:
-
-![Simulación del componente `adder1`](simulacion-adder1.png)
-
-![Simulación del componente `addern`](simulacion-addern.png)
-
-![Simulación del componente `mul`](simulacion-mul.png)
+El test bench `fpmul_tb.vhd` permite simular el componente `fpmul`.
+En la Figura 2 se muestra una captura de pantalla de GTKWave mostrando el
+resultado de la simulación.
 
 ![Simulación del componente `fpmul`](simulacion-fpmul.png)
 
 # Síntesis e implementación
 
 Se utilizó el software Vivado 2018.1 para realizar la síntesis e implementación
-del sistema, sobre la placa Arty-Z7-10.
+del sistema, sobre la placa Arty-Z7-10. En las Figuras 3, 4, 5, 6 se muestran
+los resultados de estas etapas.
 
 ![Diseño de bloques](block-design.png)
 
@@ -168,3 +152,54 @@ del sistema, sobre la placa Arty-Z7-10.
 ![Tabla de utilización](utilization-table.png)
 
 ![Gráfico de utilización](utilization-graph.png)
+
+\newpage
+
+# Código C y prueba
+
+El código C que permitió probar el diseño es el siguiente:
+
+```c
+int main (void) {
+	u32 opA = 0xFF7802DD;
+	u32 opB = 0x3E410611;
+	u32 res = 0x00000000; // deberia ser 0xFE3B0009;
+
+    xil_printf("-- fpmul IP -- Inicio --\r\n");
+
+    FPMUL_IP_mWriteReg(XPAR_FPMUL_IP_S_AXI_BASEADDR, FPMUL_IP_S_AXI_SLV_REG0_OFFSET, opA);
+    FPMUL_IP_mWriteReg(XPAR_FPMUL_IP_S_AXI_BASEADDR, FPMUL_IP_S_AXI_SLV_REG1_OFFSET, opB);
+    res = FPMUL_IP_mReadReg(XPAR_FPMUL_IP_S_AXI_BASEADDR, FPMUL_IP_S_AXI_SLV_REG2_OFFSET);
+
+    xil_printf("Cuenta: %x * %x = %x\r\n", opA, opB, res);
+}
+```
+
+Al ejecutarlo se envía el siguiente texto mediante la interfaz UART, lo cual
+prueba que el multiplicador funciona correctamente y puede ser utilizado desde
+el sistema de procesamiento mediante el bus AXI:
+
+```
+-- fpmul IP -- Inicio --
+Cuenta: FF7802DD * 3E410611 = FE3B0009
+```
+
+# Dificultades
+
+La implementación realizada para la materia CLP no pudo ser utilizada sin
+cambios, debido a los siguientes problemas:
+
+* La implementación estaba hecha en lenguaje VHDL-2008, y el IP packager de
+  Vivado no soporta esa versión. Para este TP se hicieron los ajustes
+  necesarios para utilizar el lenguaje VHDL-87 y de esta manera que módulo
+  pueda ser empaquetado en una IP.
+
+* La implementación original además contenía módulos VHDL para sumar y
+  multiplicar números enteros. A pesar de que la simulación arrojaba resultados
+  satisfactorios, por alguna razón el diseño final no funcionaba
+  (el resultado de la multiplicación era siempre `80000000` independientemente del
+  valor de los operandos).
+
+  Para resolver esto se reescribió la arquitectura de `fpmul` descartando los
+  módulos sumador y multiplicador y efectuando las operaciones mediante
+  sentencias de VHDL, dentro de un bloque `process`.
